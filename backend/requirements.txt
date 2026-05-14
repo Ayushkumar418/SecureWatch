@@ -1,0 +1,8 @@
+# SIEM Backend — Python dependencies
+# Install with:  pip install -r requirements.txt
+
+flask==3.0.3
+flask-cors==4.0.1
+psycopg2-binary==2.9.9
+python-dotenv==1.0.1
+anthropic==0.100.0    # Phase 3 — AI alert explanations
