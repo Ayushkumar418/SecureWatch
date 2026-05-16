@@ -37,25 +37,17 @@ logging.basicConfig(
 log = logging.getLogger("SecureWatch")
 
 BANNER = r"""
-╔══════════════════════════════════════════════════════════════╗
-║                                                              ║
-║   ███████╗███████╗ ██████╗██╗   ██╗██████╗ ███████╗          ║
-║   ██╔════╝██╔════╝██╔════╝██║   ██║██╔══██╗██╔════╝          ║
-║   ███████╗█████╗  ██║     ██║   ██║██████╔╝█████╗            ║
-║   ╚════██║██╔══╝  ██║     ██║   ██║██╔══██╗██╔══╝            ║
-║   ███████║███████╗╚██████╗╚██████╔╝██║  ██║███████╗          ║
-║   ╚══════╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝          ║
-║                                                              ║
-║   ██╗    ██╗ █████╗ ████████╗ ██████╗██╗  ██╗                ║
-║   ██║    ██║██╔══██╗╚══██╔══╝██╔════╝██║  ██║                ║
-║   ██║ █╗ ██║███████║   ██║   ██║     ███████║                ║
-║   ██║███╗██║██╔══██║   ██║   ██║     ██╔══██║                ║
-║   ╚███╔███╔╝██║  ██║   ██║   ╚██████╗██║  ██║                ║
-║    ╚══╝╚══╝ ╚═╝  ╚═╝   ╚═╝    ╚═════╝╚═╝  ╚═╝                ║
-║                                                              ║
-║   AI-Powered Real-Time Cross-Platform SIEM                   ║
-║   v3.0                                                       ║
-╚══════════════════════════════════════════════════════════════╝
++==============================================================+
+|                                                              |
+|   ____                           __        __    _       _   |
+|  / ___|  ___  ___ _   _ _ __ ___\ \      / /_ _| |_ ___| |_ |
+|  \___ \ / _ \/ __| | | | '__/ _ \\ \ /\ / / _` | __/ __| '_ \|
+|   ___) |  __/ (__| |_| | | |  __/ \ V  V / (_| | || (__| | | |
+|  |____/ \___|\___|\__,_|_|  \___|  \_/\_/ \__,_|\__\___|_| |_|
+|                                                              |
+|   AI-Powered Real-Time Cross-Platform SIEM                   |
+|   v3.0                                                       |
++==============================================================+
 """
 
 
@@ -79,33 +71,39 @@ def main():
     print_config_summary()
 
     # ── 1. Database migration ─────────────────────────────────────────
-    log.info("═══ Database ═══")
+    log.info("=== Database ===")
+    db_available = False
     try:
         from models.db import ensure_schema
         ensure_schema()
-        log.info("  ✅ Database connected & schema up to date")
+        log.info("  [OK] Database connected & schema up to date")
+        db_available = True
     except Exception as e:
-        log.error("  ❌ Database connection failed: %s", e)
-        log.error("     Make sure PostgreSQL is running and .env is configured.")
-        sys.exit(1)
+        if config.DEMO_MODE:
+            log.warning("  [SKIP] Database not available: %s", e)
+            log.warning("         Running in demo mode without persistence.")
+        else:
+            log.error("  [FAIL] Database connection failed: %s", e)
+            log.error("         Make sure PostgreSQL is running and .env is configured.")
+            sys.exit(1)
 
     # ── 2. Detection engine ───────────────────────────────────────────
-    log.info("═══ Detection Engine ═══")
+    log.info("=== Detection Engine ===")
     from detection.engine import DetectionEngine
     engine = DetectionEngine()
-    log.info("  ✅ Detection engine ready (%d rules loaded)", len(engine.rules))
+    log.info("  [OK] Detection engine ready (%d rules loaded)", len(engine.rules))
 
     # ── 3. Flask API + WebSocket ──────────────────────────────────────
-    log.info("═══ API Server ═══")
+    log.info("=== API Server ===")
     from api.app import app
 
     # Register threat intel routes
     try:
         from api.threat_routes import threat_bp
         app.register_blueprint(threat_bp)
-        log.info("  ✅ Threat intelligence routes registered")
+        log.info("  [OK] Threat intelligence routes registered")
     except Exception as e:
-        log.warning("  ⬚ Threat intel routes not loaded: %s", e)
+        log.warning("  [--] Threat intel routes not loaded: %s", e)
 
     # Initialize WebSocket
     socketio = None
@@ -115,14 +113,14 @@ def main():
         if socketio:
             engine.set_alert_callback(broadcast_alert)
     except ImportError:
-        log.warning("  ⬚ flask-socketio not installed — using HTTP polling")
+        log.warning("  [--] flask-socketio not installed -- using HTTP polling")
 
     # ── 4. Discover & start agents ────────────────────────────────────
-    log.info("═══ Log Agents ═══")
+    log.info("=== Log Agents ===")
 
     if config.DEMO_MODE:
         # Start log simulator in background
-        log.info("  🎭 Starting log simulator (demo mode)...")
+        log.info("  [DEMO] Starting log simulator...")
         import threading
         from simulate_logs import run_simulator
         sim_thread = threading.Thread(target=run_simulator, daemon=True, name="simulator")
@@ -133,10 +131,10 @@ def main():
     agents = get_agents()
     for agent in agents:
         agent.start()
-    log.info("  ✅ %d agent(s) started", len(agents))
+    log.info("  [OK] %d agent(s) started", len(agents))
 
     # ── 5. AI analyzer (optional) ─────────────────────────────────────
-    log.info("═══ AI Analyzer ═══")
+    log.info("=== AI Analyzer ===")
     gemini_ok = config.GEMINI_API_KEY and "your" not in config.GEMINI_API_KEY
     anthropic_ok = config.ANTHROPIC_API_KEY and "your" not in config.ANTHROPIC_API_KEY
     if gemini_ok or anthropic_ok:
@@ -145,48 +143,48 @@ def main():
             from ai_analyzer import run as run_ai
             ai_thread = threading.Thread(target=run_ai, daemon=True, name="ai_analyzer")
             ai_thread.start()
-            log.info("  ✅ AI analyzer started (%s)",
+            log.info("  [OK] AI analyzer started (%s)",
                      "Gemini" if gemini_ok else "Anthropic")
         except Exception as e:
-            log.warning("  ⬚ AI analyzer failed to start: %s", e)
+            log.warning("  [--] AI analyzer failed to start: %s", e)
     else:
-        log.info("  ⬚ No AI keys configured — rule-based analysis only")
+        log.info("  [--] No AI keys configured -- rule-based analysis only")
 
     # ── 6. Email notifier (optional) ──────────────────────────────────
-    log.info("═══ Email Notifier ═══")
+    log.info("=== Email Notifier ===")
     if config.SMTP_USER and "your" not in config.SMTP_USER:
         try:
             import threading
             from email_notifier import run as run_email
             email_thread = threading.Thread(target=run_email, daemon=True, name="email_notifier")
             email_thread.start()
-            log.info("  ✅ Email notifier started")
+            log.info("  [OK] Email notifier started")
         except Exception as e:
-            log.warning("  ⬚ Email notifier failed: %s", e)
+            log.warning("  [--] Email notifier failed: %s", e)
     else:
-        log.info("  ⬚ SMTP not configured — email alerts disabled")
+        log.info("  [--] SMTP not configured -- email alerts disabled")
 
     # ── 7. Threat intelligence ────────────────────────────────────────
-    log.info("═══ Threat Intelligence ═══")
+    log.info("=== Threat Intelligence ===")
     if config.VIRUSTOTAL_API_KEY or config.ABUSEIPDB_API_KEY:
         try:
             from threat_intel.manager import ThreatIntelManager
             ti = ThreatIntelManager()
-            log.info("  ✅ Threat intel ready (%d providers)", len(ti.providers))
+            log.info("  [OK] Threat intel ready (%d providers)", len(ti.providers))
         except Exception as e:
-            log.warning("  ⬚ Threat intel failed: %s", e)
+            log.warning("  [--] Threat intel failed: %s", e)
     else:
-        log.info("  ⬚ No threat intel API keys — enrichment disabled")
+        log.info("  [--] No threat intel API keys -- enrichment disabled")
 
     # ── 8. Start server ───────────────────────────────────────────────
     log.info("")
-    log.info("══════════════════════════════════════════════════════")
-    log.info("  🌐 Dashboard:   %s", config.DASHBOARD_URL)
-    log.info("  🔌 API:         http://%s:%d/api", config.API_HOST, config.API_PORT)
-    log.info("  📡 WebSocket:   %s", "Enabled" if socketio else "Disabled (polling)")
-    log.info("  🖥️  OS:          %s (%s)", config.OS_TYPE, config.OS_RELEASE)
-    log.info("  🎭 Mode:        %s", "DEMO" if config.DEMO_MODE else "LIVE")
-    log.info("══════════════════════════════════════════════════════")
+    log.info("======================================================")
+    log.info("  Dashboard:   %s", config.DASHBOARD_URL)
+    log.info("  API:         http://%s:%d/api", config.API_HOST, config.API_PORT)
+    log.info("  WebSocket:   %s", "Enabled" if socketio else "Disabled (polling)")
+    log.info("  OS:          %s (%s)", config.OS_TYPE, config.OS_RELEASE)
+    log.info("  Mode:        %s", "DEMO" if config.DEMO_MODE else "LIVE")
+    log.info("======================================================")
     log.info("  Press Ctrl+C to stop all services.")
     log.info("")
 

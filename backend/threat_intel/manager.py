@@ -25,20 +25,20 @@ class ThreatIntelManager:
             try:
                 from threat_intel.virustotal import VirusTotalClient
                 self.providers.append(VirusTotalClient(config.VIRUSTOTAL_API_KEY))
-                log.info("  ✅ VirusTotal provider enabled")
+                log.info("  [OK] VirusTotal provider enabled")
             except Exception as e:
-                log.warning("  ❌ VirusTotal init failed: %s", e)
+                log.warning("  [FAIL] VirusTotal init failed: %s", e)
 
         if config.ABUSEIPDB_API_KEY:
             try:
                 from threat_intel.abuseipdb import AbuseIPDBClient
                 self.providers.append(AbuseIPDBClient(config.ABUSEIPDB_API_KEY))
-                log.info("  ✅ AbuseIPDB provider enabled")
+                log.info("  [OK] AbuseIPDB provider enabled")
             except Exception as e:
-                log.warning("  ❌ AbuseIPDB init failed: %s", e)
+                log.warning("  [FAIL] AbuseIPDB init failed: %s", e)
 
         if not self.providers:
-            log.info("  ⬚ No threat intel API keys — running without enrichment")
+            log.info("  [--] No threat intel API keys -- running without enrichment")
 
     def lookup(self, ip: str) -> dict:
         """

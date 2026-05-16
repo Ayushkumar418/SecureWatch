@@ -38,12 +38,12 @@ class BaseAgent(abc.ABC):
             daemon=True,
         )
         self._thread.start()
-        self.logger.info("✅ %s started", self.name)
+        self.logger.info("[OK] %s started", self.name)
 
     def stop(self):
         """Signal the agent to stop."""
         self._running = False
-        self.logger.info("⏹  %s stopping", self.name)
+        self.logger.info("[STOP] %s stopping", self.name)
 
     def is_alive(self):
         """Check if the agent thread is still running."""
@@ -74,15 +74,18 @@ class BaseAgent(abc.ABC):
         """
         Insert a normalized event into the DB and broadcast via WebSocket.
         Called by agents after parsing a raw log line.
+        If DB is unavailable (demo mode), still broadcasts and detects.
         """
-        from models.db import insert_event
-
         # Ensure required fields
         normalized.setdefault("host", "")
         normalized.setdefault("os_type", self.os_type)
         normalized.setdefault("source_name", self.source_name)
 
+        event_id = None
+
+        # Try DB insert (may fail if PostgreSQL is not running)
         try:
+            from models.db import insert_event
             event_id = insert_event(
                 source_name=normalized["source_name"],
                 timestamp=normalized.get("timestamp", datetime.now(timezone.utc)),
@@ -96,26 +99,29 @@ class BaseAgent(abc.ABC):
                 host=normalized.get("host"),
                 os_type=normalized.get("os_type"),
             )
+        except Exception:
+            pass  # DB not available — continue without persistence
 
-            # Broadcast to WebSocket (if available)
-            try:
-                from websocket.server import broadcast_event
-                normalized["id"] = event_id
-                broadcast_event(normalized)
-            except ImportError:
-                pass
+        # Broadcast to WebSocket (if available)
+        try:
+            from websocket.server import broadcast_event
+            normalized["id"] = event_id
+            # Make timestamp serializable
+            ts = normalized.get("timestamp")
+            if hasattr(ts, "isoformat"):
+                normalized["timestamp"] = ts.isoformat()
+            broadcast_event(normalized)
+        except Exception:
+            pass
 
-            # Feed into detection engine
-            try:
-                from detection.engine import get_engine
-                engine = get_engine()
-                if engine:
-                    engine.check(normalized)
-            except ImportError:
-                pass
+        # Feed into detection engine
+        try:
+            from detection.engine import get_engine
+            engine = get_engine()
+            if engine:
+                engine.check(normalized)
+        except Exception:
+            pass
 
-            return event_id
+        return event_id
 
-        except Exception as e:
-            self.logger.error("Failed to emit event: %s", e)
-            return None

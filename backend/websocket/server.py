@@ -26,7 +26,7 @@ def init_websocket(app):
             logger=False,
             engineio_logger=False,
         )
-        log.info("✅ WebSocket server initialized (Socket.IO)")
+        log.info("[OK] WebSocket server initialized (Socket.IO)")
 
         @_socketio.on("connect", namespace="/live")
         def on_connect():

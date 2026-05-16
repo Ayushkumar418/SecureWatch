@@ -148,9 +148,9 @@ def random_scenario():
 
 def run_simulator():
     print(f"Log simulator writing to {SIM_DIR}")
-    print("  auth.log  →", AUTH_FILE)
-    print("  access.log→", APACHE_FILE)
-    print("  syslog    →", SYSLOG_FILE)
+    print("  auth.log  ->", AUTH_FILE)
+    print("  access.log->", APACHE_FILE)
+    print("  syslog    ->", SYSLOG_FILE)
     print("Press Ctrl+C to stop.\n")
     while True:
         scenario = random_scenario()
