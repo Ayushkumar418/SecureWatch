@@ -1,5 +1,5 @@
 """
-engine.py — Central detection engine.
+engine.py -- Central detection engine.
 
 All normalized events pass through this engine. It evaluates each event
 against all active detection rules, fires alerts when rules trigger,
@@ -8,11 +8,23 @@ and feeds the correlator for multi-event pattern detection.
 import logging
 from datetime import datetime, timezone
 
-from models.db import insert_alert
-
 log = logging.getLogger("detection.engine")
 
 _engine_instance = None
+_db_available = None  # None = not checked yet, True/False after first attempt
+
+
+def _check_db():
+    """Check if database is available (cached after first attempt)."""
+    global _db_available
+    if _db_available is not None:
+        return _db_available
+    try:
+        from models.db import insert_alert
+        _db_available = True
+    except Exception:
+        _db_available = False
+    return _db_available
 
 
 def get_engine():
@@ -35,6 +47,7 @@ class DetectionEngine:
         self.rules = get_all_rules()
         self.correlator = EventCorrelator()
         self._alert_callback = None
+        self._db_warned = False
 
         _engine_instance = self
         log.info("Detection engine initialized with %d rules", len(self.rules))
@@ -65,8 +78,12 @@ class DetectionEngine:
             log.error("Detection engine error: %s", e, exc_info=True)
 
     def _create_alert(self, alert_data: dict):
-        """Insert alert into DB and notify via callback."""
+        """Insert alert into DB (if available) and notify via callback."""
+        alert_id = None
+
+        # Try DB insert — silently skip if not available
         try:
+            from models.db import insert_alert
             alert_id = insert_alert(
                 rule_name=alert_data["rule_name"],
                 severity=alert_data["severity"],
@@ -76,15 +93,17 @@ class DetectionEngine:
                 related_users=alert_data.get("related_users", []),
                 event_count=alert_data.get("event_count", 1),
             )
-            log.warning(
-                "🚨 ALERT #%s [%s] %s — %s",
-                alert_id, alert_data["severity"],
-                alert_data["rule_name"], alert_data["title"]
-            )
+        except Exception:
+            if not self._db_warned:
+                log.warning("DB not available -- alerts will not persist (demo mode)")
+                self._db_warned = True
 
-            if self._alert_callback:
-                alert_data["id"] = alert_id
-                self._alert_callback(alert_data)
+        log.warning(
+            "ALERT [%s] %s -- %s",
+            alert_data["severity"],
+            alert_data["rule_name"], alert_data["title"]
+        )
 
-        except Exception as e:
-            log.error("Failed to create alert: %s", e)
+        if self._alert_callback:
+            alert_data["id"] = alert_id
+            self._alert_callback(alert_data)

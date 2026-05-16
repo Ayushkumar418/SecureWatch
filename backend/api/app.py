@@ -25,18 +25,38 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from models.db import get_conn
 
 app = Flask(__name__)
-# CORS: set DASHBOARD_URL in .env to match your frontend origin
+# CORS: allow dashboard origins
 _dashboard = os.getenv("DASHBOARD_URL", "http://localhost:3000")
-CORS(app, origins=[_dashboard, "http://localhost:3000", "http://192.168.56.101:3000"])
+CORS(app, origins=[_dashboard, "http://localhost:3000", "http://127.0.0.1:3000", "*"])
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("siem_api")
 
 
+# ── root route ────────────────────────────────────────────────────────────
+
+@app.route("/")
+def root():
+    """Root route — shows API info instead of 404."""
+    return jsonify({
+        "name": "SecureWatch AI",
+        "version": "3.0",
+        "status": "running",
+        "dashboard": _dashboard,
+        "endpoints": {
+            "events": "/api/events",
+            "alerts": "/api/alerts",
+            "stats": "/api/stats",
+            "health": "/api/health",
+            "threat_intel": "/api/threat/lookup/<ip>",
+        }
+    })
+
+
 # ── helpers ───────────────────────────────────────────────────────────────
 
 def row_to_dict(row, cursor):
-    """Convert psycopg2 tuple row → dict using cursor.description."""
+    """Convert psycopg2 tuple row to dict using cursor.description."""
     cols = [desc[0] for desc in cursor.description]
     d = dict(zip(cols, row))
     # Make datetimes JSON-serializable

@@ -133,11 +133,13 @@ def main():
         agent.start()
     log.info("  [OK] %d agent(s) started", len(agents))
 
-    # ── 5. AI analyzer (optional) ─────────────────────────────────────
+    # ── 5. AI analyzer (optional — requires DB) ──────────────────────
     log.info("=== AI Analyzer ===")
     gemini_ok = config.GEMINI_API_KEY and "your" not in config.GEMINI_API_KEY
     anthropic_ok = config.ANTHROPIC_API_KEY and "your" not in config.ANTHROPIC_API_KEY
-    if gemini_ok or anthropic_ok:
+    if not db_available:
+        log.info("  [--] Skipped -- requires database (rule-based detection still active)")
+    elif gemini_ok or anthropic_ok:
         try:
             import threading
             from ai_analyzer import run as run_ai
@@ -150,9 +152,11 @@ def main():
     else:
         log.info("  [--] No AI keys configured -- rule-based analysis only")
 
-    # ── 6. Email notifier (optional) ──────────────────────────────────
+    # ── 6. Email notifier (optional — requires DB) ───────────────────
     log.info("=== Email Notifier ===")
-    if config.SMTP_USER and "your" not in config.SMTP_USER:
+    if not db_available:
+        log.info("  [--] Skipped -- requires database")
+    elif config.SMTP_USER and "your" not in config.SMTP_USER:
         try:
             import threading
             from email_notifier import run as run_email
