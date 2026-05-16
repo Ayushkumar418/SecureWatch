@@ -27,6 +27,7 @@ postgres_data/
 
 # ── Graphify ─────────────────────────────────────────────────
 graphify-out/*
+.graphifyignore
 
 # ── Logs (simulation) ───────────────────────────────────────
 /tmp/siem_sim_logs/
