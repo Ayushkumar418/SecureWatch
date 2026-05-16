@@ -100,7 +100,24 @@ class BaseAgent(abc.ABC):
                 os_type=normalized.get("os_type"),
             )
         except Exception:
-            pass  # DB not available — continue without persistence
+            # DB not available -- use in-memory store
+            try:
+                from models.mem_store import insert_event as mem_insert
+                event_id = mem_insert(
+                    source_name=normalized["source_name"],
+                    timestamp=normalized.get("timestamp", datetime.now(timezone.utc)),
+                    severity=normalized.get("severity", "INFO"),
+                    message=normalized.get("message", ""),
+                    raw_log=normalized.get("raw_log"),
+                    ip_address=normalized.get("ip_address"),
+                    username=normalized.get("username"),
+                    event_type=normalized.get("event_type"),
+                    extra_data=normalized.get("extra_data"),
+                    host=normalized.get("host"),
+                    os_type=normalized.get("os_type"),
+                )
+            except Exception:
+                pass
 
         # Broadcast to WebSocket (if available)
         try:

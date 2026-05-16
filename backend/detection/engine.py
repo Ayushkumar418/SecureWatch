@@ -81,7 +81,7 @@ class DetectionEngine:
         """Insert alert into DB (if available) and notify via callback."""
         alert_id = None
 
-        # Try DB insert — silently skip if not available
+        # Try DB insert -- fall back to in-memory store
         try:
             from models.db import insert_alert
             alert_id = insert_alert(
@@ -94,9 +94,20 @@ class DetectionEngine:
                 event_count=alert_data.get("event_count", 1),
             )
         except Exception:
-            if not self._db_warned:
-                log.warning("DB not available -- alerts will not persist (demo mode)")
-                self._db_warned = True
+            # Use in-memory store
+            try:
+                from models.mem_store import insert_alert as mem_insert_alert
+                alert_id = mem_insert_alert(
+                    rule_name=alert_data["rule_name"],
+                    severity=alert_data["severity"],
+                    title=alert_data["title"],
+                    description=alert_data.get("description"),
+                    related_ips=alert_data.get("related_ips", []),
+                    related_users=alert_data.get("related_users", []),
+                    event_count=alert_data.get("event_count", 1),
+                )
+            except Exception:
+                pass
 
         log.warning(
             "ALERT [%s] %s -- %s",

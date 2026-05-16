@@ -133,7 +133,13 @@ def list_events():
 
         return jsonify({"events": events, "count": len(events), "total": total})
     except Exception:
-        return jsonify({"events": [], "count": 0, "total": 0})
+        # Fall back to in-memory store
+        from models.mem_store import get_events as mem_get_events
+        events, total = mem_get_events(
+            source=source, severity=severity, search=search,
+            limit=limit, offset=offset
+        )
+        return jsonify({"events": events, "count": len(events), "total": total})
 
 
 @app.get("/api/events/<int:event_id>")
@@ -200,7 +206,10 @@ def list_alerts():
 
         return jsonify({"alerts": alerts, "count": len(alerts)})
     except Exception:
-        return jsonify({"alerts": [], "count": 0})
+        # Fall back to in-memory store
+        from models.mem_store import get_alerts as mem_get_alerts
+        alerts = mem_get_alerts(resolved=resolved, severity=severity, limit=limit)
+        return jsonify({"alerts": alerts, "count": len(alerts)})
 
 
 @app.post("/api/alerts/<int:alert_id>/resolve")
@@ -294,15 +303,9 @@ def stats():
             "top_attacking_ips":  top_ips,
         })
     except Exception:
-        # DB not available -- return empty defaults (demo mode)
-        return jsonify({
-            "events_24h":         0,
-            "active_alerts":      0,
-            "alerts_by_severity": {},
-            "events_by_source":   {},
-            "timeline":           [],
-            "top_attacking_ips":  [],
-        })
+        # DB not available -- use in-memory store
+        from models.mem_store import get_stats as mem_get_stats
+        return jsonify(mem_get_stats())
 
 
 # ── AI status (for dashboard notification banner) ─────────────────────────
