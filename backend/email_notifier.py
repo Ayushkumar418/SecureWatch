@@ -160,7 +160,7 @@ def build_html(alert: dict) -> str:
 
       <!-- Action button -->
       <div style="text-align:center;margin-top:20px">
-        <a href="http://localhost:5000/api/alerts/{alert['id']}"
+        <a href="{os.getenv('DASHBOARD_URL', 'http://localhost:3000')}#alerts"
            style="background:{color};color:#fff;padding:10px 24px;
                   text-decoration:none;border-radius:6px;font-size:14px">
           View Alert in Dashboard →

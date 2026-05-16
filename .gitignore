@@ -1,0 +1,32 @@
+# ── Dependencies ──────────────────────────────────────────────
+node_modules/
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# ── Environment (NEVER commit secrets) ───────────────────────
+.env
+backend/.env
+frontend/.env
+
+# ── Build output ─────────────────────────────────────────────
+frontend/dist/
+*.egg-info/
+
+# ── IDE / OS ─────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Docker ───────────────────────────────────────────────────
+postgres_data/
+
+# ── Graphify ─────────────────────────────────────────────────
+graphify-out/*
+
+# ── Logs (simulation) ───────────────────────────────────────
+/tmp/siem_sim_logs/

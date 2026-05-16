@@ -25,7 +25,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from models.db import get_conn
 
 app = Flask(__name__)
-CORS(app, origins=["http://192.168.56.101:3000", "http://localhost:3000"])   # allow React dev server (localhost:3000) to call us
+# CORS: set DASHBOARD_URL in .env to match your frontend origin
+_dashboard = os.getenv("DASHBOARD_URL", "http://localhost:3000")
+CORS(app, origins=[_dashboard, "http://localhost:3000", "http://192.168.56.101:3000"])
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("siem_api")
@@ -97,12 +99,18 @@ def list_events():
     """
     params += [limit, offset]
 
+    # Get total count for pagination
+    count_sql = f"SELECT COUNT(*) FROM events {where}"
+    count_params = params[:-2]  # exclude limit/offset
+
     with get_conn() as conn:
         with conn.cursor() as cur:
+            cur.execute(count_sql, count_params)
+            total = cur.fetchone()[0]
             cur.execute(sql, params)
             events = rows_to_list(cur)
 
-    return jsonify({"events": events, "count": len(events)})
+    return jsonify({"events": events, "count": len(events), "total": total})
 
 
 @app.get("/api/events/<int:event_id>")
@@ -118,6 +126,23 @@ def get_event(event_id):
 
 
 # ── alerts ────────────────────────────────────────────────────────────────
+
+@app.get("/api/alerts/<int:alert_id>")
+def get_alert(alert_id):
+    """Get a single alert by ID with full AI explanation."""
+    sql = """
+        SELECT id, rule_name, severity, title, description,
+               ai_explanation, related_ips, related_users,
+               event_count, is_resolved, created_at, resolved_at
+        FROM   alerts WHERE id = %s
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (alert_id,))
+            row = cur.fetchone()
+            if not row:
+                abort(404)
+            return jsonify(row_to_dict(row, cur))
 
 @app.get("/api/alerts")
 def list_alerts():
@@ -321,6 +346,54 @@ def health():
         return jsonify({"status": "ok", "db": "connected"})
     except Exception as e:
         return jsonify({"status": "error", "detail": str(e)}), 500
+
+
+# ── on-demand AI analysis ─────────────────────────────────────────────────
+
+@app.post("/api/alerts/<int:alert_id>/analyze")
+def analyze_now(alert_id):
+    """Force immediate AI analysis for a specific alert."""
+    import sys as _sys
+    _sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    try:
+        from ai_analyzer import try_gemini, try_anthropic, get_fallback_analysis, format_explanation, save_explanation
+    except ImportError as e:
+        return jsonify({"error": f"Could not import ai_analyzer: {e}"}), 500
+
+    sql = """
+        SELECT id, rule_name, severity, title, description,
+               related_ips, related_users, event_count, created_at
+        FROM alerts WHERE id = %s
+    """
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (alert_id,))
+            row = cur.fetchone()
+            if not row:
+                abort(404)
+            cols  = [d[0] for d in cur.description]
+            alert = dict(zip(cols, row))
+
+    gemini_key    = os.getenv("GEMINI_API_KEY", "")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    analysis = None
+    source   = "Rule-Based"
+
+    if gemini_key and "your-key" not in gemini_key:
+        analysis = try_gemini(alert)
+        if analysis: source = "Gemini AI"
+
+    if not analysis and anthropic_key and "your-key" not in anthropic_key:
+        analysis = try_anthropic(alert)
+        if analysis: source = "Claude AI"
+
+    if not analysis:
+        analysis = get_fallback_analysis(alert)
+
+    explanation = format_explanation(analysis, source)
+    save_explanation(alert_id, explanation)
+    log.info("Manual AI analysis for alert #%s via %s", alert_id, source)
+    return jsonify({"alert_id": alert_id, "source": source, "ai_explanation": explanation})
 
 
 # ── run ───────────────────────────────────────────────────────────────────

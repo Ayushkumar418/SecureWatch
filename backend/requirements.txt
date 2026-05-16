@@ -1,8 +1,19 @@
-# SIEM Backend — Python dependencies
+# SecureWatch AI — Python Dependencies
 # Install with:  pip install -r requirements.txt
 
+# ── Core ──────────────────────────────────────────────────────────────────
 flask==3.0.3
 flask-cors==4.0.1
 psycopg2-binary==2.9.9
 python-dotenv==1.0.1
-anthropic==0.100.0    # Phase 3 — AI alert explanations
+
+# ── AI Providers ──────────────────────────────────────────────────────────
+google-generativeai>=0.8.0      # Gemini AI (primary)
+anthropic==0.100.0              # Claude AI (fallback)
+
+# ── Real-Time WebSocket ──────────────────────────────────────────────────
+flask-socketio==5.3.6
+python-socketio==5.11.0
+
+# ── Threat Intelligence ──────────────────────────────────────────────────
+requests>=2.31.0                # HTTP client for VT/AbuseIPDB APIs

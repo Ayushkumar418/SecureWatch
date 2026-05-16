@@ -1,0 +1,64 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL Database ──────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: securewatch-db
+    environment:
+      POSTGRES_DB: siem_db
+      POSTGRES_USER: siem_user
+      POSTGRES_PASSWORD: siem_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/models/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U siem_user -d siem_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend (Flask API + Agents + AI) ────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: securewatch-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: siem_db
+      DB_USER: siem_user
+      DB_PASSWORD: siem_pass
+      DASHBOARD_URL: http://localhost:3000
+      SIEM_DEMO_MODE: "true"       # demo mode by default in Docker
+      # Set these for AI features:
+      # GEMINI_API_KEY: your-key
+      # ANTHROPIC_API_KEY: your-key
+      # VIRUSTOTAL_API_KEY: your-key
+      # ABUSEIPDB_API_KEY: your-key
+    ports:
+      - "5000:5000"
+    volumes:
+      - /var/log:/host_logs:ro     # mount host logs (Linux only)
+    restart: unless-stopped
+
+  # ── Frontend (React Dashboard) ──────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: securewatch-frontend
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
