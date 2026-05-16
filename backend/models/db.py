@@ -11,11 +11,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 _pool = None
+_pool_failed = False
+
+
+class DbUnavailable(Exception):
+    """Raised when PostgreSQL is not reachable."""
+    pass
 
 
 def get_pool():
-    global _pool
-    if _pool is None:
+    global _pool, _pool_failed
+    if _pool is not None:
+        return _pool
+    if _pool_failed:
+        raise DbUnavailable("PostgreSQL not available")
+    try:
         _pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=2,
             maxconn=10,
@@ -25,7 +35,10 @@ def get_pool():
             user=os.getenv("DB_USER", "siem_user"),
             password=os.getenv("DB_PASSWORD", os.getenv("DB_PASS", "siem_pass")),
         )
-    return _pool
+        return _pool
+    except Exception:
+        _pool_failed = True
+        raise DbUnavailable("PostgreSQL not available")
 
 
 @contextmanager

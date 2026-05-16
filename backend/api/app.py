@@ -123,14 +123,17 @@ def list_events():
     count_sql = f"SELECT COUNT(*) FROM events {where}"
     count_params = params[:-2]  # exclude limit/offset
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(count_sql, count_params)
-            total = cur.fetchone()[0]
-            cur.execute(sql, params)
-            events = rows_to_list(cur)
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(count_sql, count_params)
+                total = cur.fetchone()[0]
+                cur.execute(sql, params)
+                events = rows_to_list(cur)
 
-    return jsonify({"events": events, "count": len(events), "total": total})
+        return jsonify({"events": events, "count": len(events), "total": total})
+    except Exception:
+        return jsonify({"events": [], "count": 0, "total": 0})
 
 
 @app.get("/api/events/<int:event_id>")
@@ -189,12 +192,15 @@ def list_alerts():
     """
     params.append(limit)
 
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            alerts = rows_to_list(cur)
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                alerts = rows_to_list(cur)
 
-    return jsonify({"alerts": alerts, "count": len(alerts)})
+        return jsonify({"alerts": alerts, "count": len(alerts)})
+    except Exception:
+        return jsonify({"alerts": [], "count": 0})
 
 
 @app.post("/api/alerts/<int:alert_id>/resolve")
@@ -223,69 +229,80 @@ def resolve_alert(alert_id):
 @app.get("/api/stats")
 def stats():
     """Returns counts for the dashboard top cards."""
-    with get_conn() as conn:
-        with conn.cursor() as cur:
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
 
-            # Total events (last 24h)
-            cur.execute("""
-                SELECT COUNT(*) FROM events
-                WHERE timestamp >= NOW() - INTERVAL '24 hours'
-            """)
-            events_24h = cur.fetchone()[0]
+                # Total events (last 24h)
+                cur.execute("""
+                    SELECT COUNT(*) FROM events
+                    WHERE timestamp >= NOW() - INTERVAL '24 hours'
+                """)
+                events_24h = cur.fetchone()[0]
 
-            # Active (unresolved) alerts by severity
-            cur.execute("""
-                SELECT severity, COUNT(*) FROM alerts
-                WHERE is_resolved = FALSE
-                GROUP BY severity
-            """)
-            alert_rows = cur.fetchall()
-            alerts_by_severity = {row[0]: row[1] for row in alert_rows}
+                # Active (unresolved) alerts by severity
+                cur.execute("""
+                    SELECT severity, COUNT(*) FROM alerts
+                    WHERE is_resolved = FALSE
+                    GROUP BY severity
+                """)
+                alert_rows = cur.fetchall()
+                alerts_by_severity = {row[0]: row[1] for row in alert_rows}
 
-            # Events by source (last 24h)
-            cur.execute("""
-                SELECT source_name, COUNT(*) FROM events
-                WHERE timestamp >= NOW() - INTERVAL '24 hours'
-                GROUP BY source_name
-            """)
-            source_rows   = cur.fetchall()
-            events_by_src = {row[0]: row[1] for row in source_rows}
+                # Events by source (last 24h)
+                cur.execute("""
+                    SELECT source_name, COUNT(*) FROM events
+                    WHERE timestamp >= NOW() - INTERVAL '24 hours'
+                    GROUP BY source_name
+                """)
+                source_rows   = cur.fetchall()
+                events_by_src = {row[0]: row[1] for row in source_rows}
 
-            # Events over time (last 24h, hourly buckets)
-            cur.execute("""
-                SELECT DATE_TRUNC('hour', timestamp) AS hour, COUNT(*) AS cnt
-                FROM   events
-                WHERE  timestamp >= NOW() - INTERVAL '24 hours'
-                GROUP  BY hour
-                ORDER  BY hour ASC
-            """)
-            timeline = [
-                {"hour": row[0].isoformat(), "count": row[1]}
-                for row in cur.fetchall()
-            ]
+                # Events over time (last 24h, hourly buckets)
+                cur.execute("""
+                    SELECT DATE_TRUNC('hour', timestamp) AS hour, COUNT(*) AS cnt
+                    FROM   events
+                    WHERE  timestamp >= NOW() - INTERVAL '24 hours'
+                    GROUP  BY hour
+                    ORDER  BY hour ASC
+                """)
+                timeline = [
+                    {"hour": row[0].isoformat(), "count": row[1]}
+                    for row in cur.fetchall()
+                ]
 
-            # Top attacking IPs
-            cur.execute("""
-                SELECT ip_address, COUNT(*) AS cnt FROM events
-                WHERE  ip_address IS NOT NULL
-                  AND  timestamp >= NOW() - INTERVAL '24 hours'
-                GROUP  BY ip_address
-                ORDER  BY cnt DESC
-                LIMIT  5
-            """)
-            top_ips = [
-                {"ip": row[0], "count": row[1]}
-                for row in cur.fetchall()
-            ]
+                # Top attacking IPs
+                cur.execute("""
+                    SELECT ip_address, COUNT(*) AS cnt FROM events
+                    WHERE  ip_address IS NOT NULL
+                      AND  timestamp >= NOW() - INTERVAL '24 hours'
+                    GROUP  BY ip_address
+                    ORDER  BY cnt DESC
+                    LIMIT  5
+                """)
+                top_ips = [
+                    {"ip": row[0], "count": row[1]}
+                    for row in cur.fetchall()
+                ]
 
-    return jsonify({
-        "events_24h":         events_24h,
-        "active_alerts":      sum(alerts_by_severity.values()),
-        "alerts_by_severity": alerts_by_severity,
-        "events_by_source":   events_by_src,
-        "timeline":           timeline,
-        "top_attacking_ips":  top_ips,
-    })
+        return jsonify({
+            "events_24h":         events_24h,
+            "active_alerts":      sum(alerts_by_severity.values()),
+            "alerts_by_severity": alerts_by_severity,
+            "events_by_source":   events_by_src,
+            "timeline":           timeline,
+            "top_attacking_ips":  top_ips,
+        })
+    except Exception:
+        # DB not available -- return empty defaults (demo mode)
+        return jsonify({
+            "events_24h":         0,
+            "active_alerts":      0,
+            "alerts_by_severity": {},
+            "events_by_source":   {},
+            "timeline":           [],
+            "top_attacking_ips":  [],
+        })
 
 
 # ── AI status (for dashboard notification banner) ─────────────────────────
@@ -321,7 +338,7 @@ def ai_status():
         if not rows:
             banner = {
                 "type":    "warning",
-                "message": "⚠️ AI Analyzer not started yet. Run: python ai_analyzer.py"
+                "message": "AI Analyzer not started yet. Run: python ai_analyzer.py"
             }
         else:
             latest = rows[0]
@@ -332,24 +349,24 @@ def ai_status():
                 banner = {"type": "warning", "message": latest["message"]}
             elif status in ("no_key",):
                 banner = {"type": "error",
-                          "message": "❌ No AI API key found. Add GEMINI_API_KEY to .env file."}
+                          "message": "No AI API key found. Add GEMINI_API_KEY to .env file."}
             elif status in ("no_credits",):
                 banner = {"type": "error",
-                          "message": "❌ API credits exhausted. Add credits or switch to Gemini free tier."}
+                          "message": "API credits exhausted. Add credits or switch to Gemini free tier."}
             elif status in ("fallback",):
                 banner = {"type": "info",
-                          "message": "ℹ️ Using rule-based analysis (AI API unavailable or rate limited)"}
+                          "message": "Using rule-based analysis (AI API unavailable or rate limited)"}
             else:
                 banner = {"type": "info", "message": latest.get("message", "AI status unknown")}
 
         return jsonify({"banner": banner, "history": rows})
 
-    except Exception as e:
-        # ai_status table doesn't exist yet — analyzer not started
+    except Exception:
+        # DB not available -- return info banner (not warning) for demo mode
         return jsonify({
             "banner": {
-                "type":    "warning",
-                "message": "⚠️ AI Analyzer not started yet. Run: python ai_analyzer.py"
+                "type":    "info",
+                "message": "Rule-based detection active (install PostgreSQL for AI analysis)"
             },
             "history": []
         })
