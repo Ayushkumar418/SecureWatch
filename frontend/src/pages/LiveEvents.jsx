@@ -12,7 +12,7 @@ const filterStyle = {
   outline: "none", cursor: "pointer",
 };
 
-export default function LiveEvents() {
+export default function LiveEvents({ ws }) {
   const [source, setSource]     = useState("");
   const [severity, setSeverity] = useState("");
   const [search, setSearch]     = useState("");
@@ -24,7 +24,14 @@ export default function LiveEvents() {
     (search   ? `&search=${encodeURIComponent(search)}` : "");
 
   const { data, loading } = useFetch(url, [source, severity, search, page]);
-  const events = data?.events || [];
+  const fetched = data?.events || [];
+
+  // Live socket events stream in only when no filter/pagination is active;
+  // dedupe against the fetched page by id (socket events carry real ids).
+  const unfiltered = page === 0 && !source && !severity && !search;
+  const live = unfiltered ? (ws?.liveEvents || []) : [];
+  const seen = new Set(fetched.map(e => e.id));
+  const events = [...live.filter(e => e.id != null && !seen.has(e.id)), ...fetched].slice(0, LIMIT);
 
   return (
     <div>

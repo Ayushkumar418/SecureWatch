@@ -9,7 +9,7 @@ const filterStyle = {
   fontSize: 13, fontFamily: "'Share Tech Mono', monospace", outline: "none",
 };
 
-export default function Alerts() {
+export default function Alerts({ ws }) {
   const [expanded, setExpanded]       = useState(null);
   const [resolving, setResolving]     = useState(null);
   const [showResolved, setShowRes]    = useState(false);
@@ -17,7 +17,12 @@ export default function Alerts() {
 
   const url = `${API}/alerts?resolved=${showResolved}` + (sevFilter ? `&severity=${sevFilter}` : "");
   const { data, reload } = useFetch(url, [showResolved, sevFilter]);
-  const alerts = data?.alerts || [];
+  const fetched = data?.alerts || [];
+
+  // Live socket alerts stream in only when showing unresolved, unfiltered.
+  const live = (!showResolved && !sevFilter) ? (ws?.liveAlerts || []) : [];
+  const seen = new Set(fetched.map(a => a.id));
+  const alerts = [...live.filter(a => a.id != null && !seen.has(a.id)), ...fetched];
 
   async function resolveAlert(id) {
     setResolving(id);

@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 import psycopg2.extras
 from flask import Flask, jsonify, request, abort
 from flask_cors import CORS
+from werkzeug.exceptions import HTTPException
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -48,7 +49,7 @@ def root():
             "alerts": "/api/alerts",
             "stats": "/api/stats",
             "health": "/api/health",
-            "threat_intel": "/api/threat/lookup/<ip>",
+            "threat_intel": "/api/threat-intel/<ip>",
         }
     })
 
@@ -145,13 +146,23 @@ def list_events():
 @app.get("/api/events/<int:event_id>")
 def get_event(event_id):
     sql = "SELECT * FROM events WHERE id = %s"
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (event_id,))
-            row = cur.fetchone()
-            if not row:
-                abort(404)
-            return jsonify(row_to_dict(row, cur))
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (event_id,))
+                row = cur.fetchone()
+                if not row:
+                    abort(404)
+                return jsonify(row_to_dict(row, cur))
+    except HTTPException:
+        raise
+    except Exception:
+        # Fall back to in-memory store (demo mode without PostgreSQL)
+        from models.mem_store import get_event as mem_get_event
+        event = mem_get_event(event_id)
+        if not event:
+            abort(404)
+        return jsonify(event)
 
 
 # ── alerts ────────────────────────────────────────────────────────────────
@@ -165,13 +176,23 @@ def get_alert(alert_id):
                event_count, is_resolved, created_at, resolved_at
         FROM   alerts WHERE id = %s
     """
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (alert_id,))
-            row = cur.fetchone()
-            if not row:
-                abort(404)
-            return jsonify(row_to_dict(row, cur))
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (alert_id,))
+                row = cur.fetchone()
+                if not row:
+                    abort(404)
+                return jsonify(row_to_dict(row, cur))
+    except HTTPException:
+        raise
+    except Exception:
+        # Fall back to in-memory store (demo mode without PostgreSQL)
+        from models.mem_store import get_alert as mem_get_alert
+        alert = mem_get_alert(alert_id)
+        if not alert:
+            abort(404)
+        return jsonify(alert)
 
 @app.get("/api/alerts")
 def list_alerts():
@@ -221,13 +242,22 @@ def resolve_alert(alert_id):
         WHERE  id = %s
         RETURNING id, is_resolved, resolved_at
     """
-    with get_conn() as conn:
-        with conn.cursor() as cur:
-            cur.execute(sql, (alert_id,))
-            row = cur.fetchone()
-            if not row:
-                abort(404)
-            result = row_to_dict(row, cur)
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, (alert_id,))
+                row = cur.fetchone()
+                if not row:
+                    abort(404)
+                result = row_to_dict(row, cur)
+    except HTTPException:
+        raise
+    except Exception:
+        # Fall back to in-memory store (demo mode without PostgreSQL)
+        from models.mem_store import resolve_alert as mem_resolve_alert
+        result = mem_resolve_alert(alert_id)
+        if not result:
+            abort(404)
 
     log.info("Alert %s resolved", alert_id)
     return jsonify(result)
@@ -377,15 +407,37 @@ def ai_status():
 
 # ── health ────────────────────────────────────────────────────────────────
 
+_STARTED_AT = datetime.now(timezone.utc)
+
+
 @app.get("/api/health")
 def health():
+    """Health check that works with or without PostgreSQL.
+
+    Always returns 200 while the API itself is up; the ``db`` field says
+    whether PostgreSQL is reachable. The Settings page reads
+    ``status``/``db`` from this response.
+    """
+    import config as _config
+
+    db_status = "unavailable"
     try:
         with get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
-        return jsonify({"status": "ok", "db": "connected"})
-    except Exception as e:
-        return jsonify({"status": "error", "detail": str(e)}), 500
+        db_status = "connected"
+    except Exception:
+        pass
+
+    uptime = (datetime.now(timezone.utc) - _STARTED_AT).total_seconds()
+    return jsonify({
+        "status": "ok",
+        "mode": "demo" if _config.DEMO_MODE else "live",
+        "db": db_status,
+        "agents_running": app.config.get("AGENTS_RUNNING"),
+        "uptime_seconds": int(uptime),
+        "version": "3.0",
+    })
 
 
 # ── on-demand AI analysis ─────────────────────────────────────────────────

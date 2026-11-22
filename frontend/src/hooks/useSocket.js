@@ -17,7 +17,10 @@ export function useSocket() {
 
   useEffect(() => {
     const url = API.replace("/api", "");
-    const s = io(url, {
+    // Backend emits only on the /live namespace (websocket/server.py).
+    // Connecting to the default namespace connects fine but receives
+    // nothing — the LIVE indicator would lie. See useSocket docstring.
+    const s = io(url + "/live", {
       path: "/socket.io",
       transports: ["websocket", "polling"],
       reconnectionAttempts: 5,
