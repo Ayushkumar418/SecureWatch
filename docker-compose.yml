@@ -37,6 +37,11 @@ services:
       DB_PASSWORD: siem_pass
       DASHBOARD_URL: http://localhost:3000
       SIEM_DEMO_MODE: "true"       # demo mode by default in Docker
+      # LOG_ROOT must match the volume mount below: the host's /var/log is
+      # mounted at /host_logs, and the agents read logs from LOG_ROOT.
+      # Without this the backend would read the container's own (empty)
+      # /var/log instead of the host's logs in live mode.
+      LOG_ROOT: /host_logs
       # Set these for AI features:
       # GEMINI_API_KEY: your-key
       # ANTHROPIC_API_KEY: your-key
@@ -45,7 +50,9 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - /var/log:/host_logs:ro     # mount host logs (Linux only)
+      # Host logs, read-only. Only used in live mode (SIEM_DEMO_MODE=false);
+      # demo mode reads simulated logs instead. Linux only.
+      - /var/log:/host_logs:ro
     restart: unless-stopped
 
   # ── Frontend (React Dashboard) ──────────────────────────────────────────

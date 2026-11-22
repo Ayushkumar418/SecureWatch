@@ -52,12 +52,19 @@ SMTP_PASS   = os.getenv("SMTP_PASS", "")
 ALERT_EMAIL = os.getenv("ALERT_EMAIL", SMTP_USER)
 
 # ── Linux log paths ──────────────────────────────────────────────────────
+# LOG_ROOT is the directory the agents read logs from. It is "/var/log" on a
+# normal Linux host, but in Docker the host's /var/log is mounted at
+# /host_logs (see docker-compose.yml), so the container must be told:
+#   LOG_ROOT=/host_logs
+# Without this the agents would silently read the container's own
+# (near-empty) logs instead of the host's.
+LOG_ROOT = Path(os.getenv("LOG_ROOT", "/var/log"))
 LINUX_LOG_PATHS = {
-    "auth":    Path("/var/log/auth.log"),
-    "syslog":  Path("/var/log/syslog"),
-    "kern":    Path("/var/log/kern.log"),
-    "apache":  Path("/var/log/apache2/access.log"),
-    "nginx":   Path("/var/log/nginx/access.log"),
+    "auth":    LOG_ROOT / "auth.log",
+    "syslog":  LOG_ROOT / "syslog",
+    "kern":    LOG_ROOT / "kern.log",
+    "apache":  LOG_ROOT / "apache2" / "access.log",
+    "nginx":   LOG_ROOT / "nginx" / "access.log",
 }
 
 # ── Windows Event Log channels ───────────────────────────────────────────
@@ -103,6 +110,7 @@ def print_config_summary():
         f"|  Mode:        {mode}",
         f"|  Database:    {DB_HOST}:{DB_PORT}/{DB_NAME}",
         f"|  API:         {API_HOST}:{API_PORT}",
+        f"|  Log root:    {LOG_ROOT}",
         f"|  Gemini AI:   {gemini}",
         f"|  Anthropic:   {anthro}",
         f"|  VirusTotal:  {vt}",

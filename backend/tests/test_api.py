@@ -1,8 +1,9 @@
 """Tests for api/app.py — exercised through Flask's test client.
 
-No PostgreSQL is running in this environment, so every DB call fails and
-the API must fall back to the in-memory store. These tests pin that
-behaviour: demo mode works end-to-end with zero keys and no database.
+The no-database behaviour is forced per test (the DB layer is stubbed to
+fail), so these tests pass whether or not a PostgreSQL server happens to be
+running on the test machine. Demo mode works end-to-end with zero keys and
+no database.
 """
 from datetime import datetime, timezone
 
@@ -16,6 +17,17 @@ from models import mem_store
 def _reset_store(monkeypatch):
     mem_store.reset()
     monkeypatch.setattr(config, "DEMO_MODE", True)
+    # Force the no-database path for every test in this module: the API
+    # tries PostgreSQL first and only falls back to the in-memory store on
+    # error, so without this the tests would read whatever rows happen to
+    # be in a local siem_db and fail depending on the machine's state.
+    import api.app as app_module
+    from models.db import DbUnavailable
+
+    def _no_db():
+        raise DbUnavailable("PostgreSQL not available")
+
+    monkeypatch.setattr(app_module, "get_conn", _no_db)
     yield
     mem_store.reset()
 
