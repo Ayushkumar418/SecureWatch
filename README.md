@@ -50,11 +50,13 @@
 - Batch IP lookup support
 
 ### ⚡ Real-Time Dashboard
-- **WebSocket streaming** — instant event delivery (no polling delay)
+- **WebSocket streaming** — instant event delivery (Socket.IO `/live`
+  namespace; the dashboard prepends live events/alerts as they arrive,
+  with 10 s polling as fallback)
 - Live attack timeline with auto-updating charts
 - Threat Map with ranked IP board + SVG threat rings
-- Print-to-PDF security reports
-- System health monitoring
+- Print-friendly security reports (browser print — no PDF file is generated)
+- System health monitoring (`GET /api/health`)
 
 ---
 
@@ -63,21 +65,37 @@
 ### Option 1: Docker (Recommended)
 
 ```bash
-git clone https://github.com/YourUsername/SecureWatch.git
+git clone https://github.com/Ayushkumar418/SecureWatch.git
 cd SecureWatch
-docker-compose up
+docker compose up
 ```
 
 Open **http://localhost:3000** — done!
 
-### Option 2: Manual Installation
+> Docker files are provided (`docker-compose.yml`, `backend/Dockerfile`,
+> `frontend/Dockerfile`) but the Docker build was not verified in this
+> environment (no Docker installed here). If Docker gives you trouble,
+> use the no-Docker demo below — it is verified and needs no setup
+> beyond Python + Node.
+
+### Option 2: Manual Installation (no Docker)
 
 #### Prerequisites
-- Python 3.10+
+- Python 3.12 (3.10+ works)
 - Node.js 18+
-- PostgreSQL 14+
+- PostgreSQL 14+ — **only for live/persistent mode**. Demo mode below
+  works with **no database and no API keys**.
 
-#### Backend Setup
+#### Demo mode — one command, zero setup
+
+```bash
+./run-demo.sh
+```
+
+This starts the backend with simulated logs on http://localhost:5000
+and the dashboard on http://localhost:3000. Stop with Ctrl+C.
+
+#### Backend Setup (step by step)
 
 ```bash
 cd backend
@@ -90,17 +108,17 @@ source venv/bin/activate        # Linux/Mac
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
+# Configure environment (optional for demo mode — defaults work)
 cp .env.example .env
 # Edit .env with your database credentials and API keys
 
-# Initialize database
+# Initialize database (live mode only — skip for demo mode)
 psql -U postgres -c "CREATE DATABASE siem_db;"
 psql -U postgres -d siem_db -f models/schema.sql
 
 # Start SecureWatch
 python main.py                  # Live mode (auto-detects OS)
-python main.py --demo           # Demo mode (simulated logs)
+python main.py --demo           # Demo mode (simulated logs, no DB needed)
 ```
 
 #### Frontend Setup
@@ -295,6 +313,22 @@ The dashboard features 6 pages:
 | `GET` | `/api/threat-intel/:ip` | Threat intel lookup for IP |
 | `POST` | `/api/threat-intel/batch` | Batch IP lookup |
 | `GET` | `/api/threat-intel/status` | Provider status |
+
+---
+
+## 🧪 Testing
+
+Backend tests (pytest) cover the detection rules, correlator, normalizer,
+in-memory store, config defaults and the API in demo mode (no PostgreSQL):
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+Expected: **32 passed**. The API tests run against Flask's test client
+with the in-memory store, so no database or keys are needed.
 
 ---
 

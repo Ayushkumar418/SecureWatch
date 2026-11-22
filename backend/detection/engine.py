@@ -117,4 +117,9 @@ class DetectionEngine:
 
         if self._alert_callback:
             alert_data["id"] = alert_id
+            # Fill fields the dashboard expects (the stored copy has them,
+            # but the broadcast dict is this same object).
+            alert_data.setdefault("created_at", datetime.now(timezone.utc).isoformat())
+            alert_data.setdefault("is_resolved", False)
+            alert_data.setdefault("ai_explanation", None)
             self._alert_callback(alert_data)

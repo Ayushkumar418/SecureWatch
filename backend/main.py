@@ -132,6 +132,7 @@ def main():
     for agent in agents:
         agent.start()
     log.info("  [OK] %d agent(s) started", len(agents))
+    app.config["AGENTS_RUNNING"] = len(agents)
 
     # ── 5. AI analyzer (optional — requires DB) ──────────────────────
     log.info("=== AI Analyzer ===")

@@ -157,6 +157,37 @@ def get_alerts(resolved=False, severity=None, limit=50):
         return filtered[:limit]
 
 
+def reset():
+    """Clear all stored events/alerts and reset id counters (used by tests)."""
+    global _next_event_id, _next_alert_id
+    with _lock:
+        _events.clear()
+        _alerts.clear()
+        _next_event_id = 1
+        _next_alert_id = 1
+
+
+def get_event(event_id):
+    """Return one event by id (serializable copy) or None."""
+    with _lock:
+        for e in _events:
+            if e["id"] == event_id:
+                ec = dict(e)
+                if hasattr(ec.get("timestamp"), "isoformat"):
+                    ec["timestamp"] = ec["timestamp"].isoformat()
+                return ec
+    return None
+
+
+def get_alert(alert_id):
+    """Return one alert by id or None."""
+    with _lock:
+        for a in _alerts:
+            if a["id"] == alert_id:
+                return dict(a)
+    return None
+
+
 def resolve_alert(alert_id):
     """Mark an alert as resolved."""
     with _lock:

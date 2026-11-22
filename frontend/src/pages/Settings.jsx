@@ -90,7 +90,7 @@ export default function Settings() {
     <div>
       {/* System Status */}
       <SettingsSection title="🖥️  System Status">
-        <SettingsRow label="Dashboard Version" value="SecureWatch v2.0" mono />
+        <SettingsRow label="Dashboard Version" value="SecureWatch v3.0" mono />
         <SettingsRow label="Auto-Refresh Interval" value={`${REFRESH_MS / 1000} seconds`} mono />
         <SettingsRow label="API Endpoint" value={API} mono />
         <SettingsRow label="PostgreSQL Database" status={dbOk} />
