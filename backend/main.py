@@ -75,8 +75,8 @@ def main():
     db_available = False
     try:
         from models.db import ensure_schema
-        ensure_schema()
-        log.info("  [OK] Database connected & schema up to date")
+        applied = ensure_schema()
+        log.info("  [OK] Database connected & schema up to date (%d statements)", applied)
         db_available = True
     except Exception as e:
         if config.DEMO_MODE:

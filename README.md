@@ -72,11 +72,21 @@ docker compose up
 
 Open **http://localhost:3000** — done!
 
+> **Live mode in Docker:** the backend reads the *host's* logs through
+> the `/var/log:/host_logs:ro` mount, and `LOG_ROOT=/host_logs` tells the
+> agents to look there (see `docker-compose.yml`). Without it the agents
+> would read the container's own (near-empty) logs. Set
+> `SIEM_DEMO_MODE: "false"` in `docker-compose.yml` to run live mode
+> instead of the default demo mode. Note: `journalctl` inside the
+> container still reads the container's journal, not the host's.
+>
 > Docker files are provided (`docker-compose.yml`, `backend/Dockerfile`,
-> `frontend/Dockerfile`) but the Docker build was not verified in this
-> environment (no Docker installed here). If Docker gives you trouble,
-> use the no-Docker demo below — it is verified and needs no setup
-> beyond Python + Node.
+> `frontend/Dockerfile`) and `docker compose config` validates cleanly,
+> but running the containers was **not** verified here — this server's
+> sandbox blocks container execution, so `docker compose up` needs a
+> machine where Docker can actually run containers (e.g. your laptop).
+> If Docker gives you trouble, use the no-Docker demo below — it is
+> verified and needs no setup beyond Python + Node.
 
 ### Option 2: Manual Installation (no Docker)
 
@@ -112,9 +122,11 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your database credentials and API keys
 
-# Initialize database (live mode only — skip for demo mode)
-psql -U postgres -c "CREATE DATABASE siem_db;"
-psql -U postgres -d siem_db -f models/schema.sql
+# Initialize database (live mode only — skip for demo mode).
+# Only create the empty database + user; the tables are created
+# automatically on first startup (see "Database" below).
+psql -U postgres -c "CREATE USER siem_user WITH PASSWORD 'siem_pass';"
+psql -U postgres -c "CREATE DATABASE siem_db OWNER siem_user;"
 
 # Start SecureWatch
 python main.py                  # Live mode (auto-detects OS)
@@ -254,6 +266,13 @@ The dashboard features 6 pages:
 | `DB_USER` | Database user | `siem_user` |
 | `DB_PASSWORD` | Database password | `siem_pass` |
 | `PORT` | API server port | `5000` |
+| `API_HOST` | API listen address | `0.0.0.0` |
+| `LOG_ROOT` | Directory agents read Linux logs from (`/host_logs` in Docker) | `/var/log` |
+| `TAIL_SLEEP` | Seconds between log-file polls | `0.5` |
+| `AI_POLL_INTERVAL` | Seconds between AI analysis runs | `30` |
+| `EMAIL_POLL_INTERVAL` | Seconds between email checks | `60` |
+| `BF_WINDOW` / `BF_THRESHOLD` | Brute-force window (s) / failures to alert | `120` / `5` |
+| `SCAN_WINDOW` / `SCAN_THRESHOLD` | HTTP scan window (s) / 4xx count to alert | `30` / `20` |
 | `DASHBOARD_URL` | Frontend URL (for email links) | `http://localhost:3000` |
 | `GEMINI_API_KEY` | Google Gemini AI key | — |
 | `ANTHROPIC_API_KEY` | Anthropic Claude key | — |
@@ -319,7 +338,8 @@ The dashboard features 6 pages:
 ## 🧪 Testing
 
 Backend tests (pytest) cover the detection rules, correlator, normalizer,
-in-memory store, config defaults and the API in demo mode (no PostgreSQL):
+in-memory store, config defaults, the API in demo mode (no PostgreSQL),
+and the database layer:
 
 ```bash
 cd backend
@@ -327,8 +347,26 @@ pip install -r requirements-dev.txt
 python -m pytest -q
 ```
 
-Expected: **32 passed**. The API tests run against Flask's test client
+Expected: **41 passed**. The API tests run against Flask's test client
 with the in-memory store, so no database or keys are needed.
+
+The database tests (`tests/test_db.py`) run against a real PostgreSQL
+server when one is reachable — they create a throwaway `securewatch_test`
+database, verify `ensure_schema()` builds all tables on a fresh database,
+and check the connection-pool retry. They skip cleanly when no server is
+available. To run them, point the tests at your server (defaults:
+`localhost:5432`, superuser `postgres` / password from
+`PG_SUPER_PASSWORD`, default `postgres`).
+
+### Database
+
+On startup the backend runs `ensure_schema()`, which executes
+`models/schema.sql` (tables, indexes, seed data) plus the remaining
+migrations — so a **fresh empty database is set up automatically** and a
+failed schema creation is loud (live mode exits instead of silently
+running without tables). If PostgreSQL itself is down at startup, the
+backend keeps working in demo mode and retries the connection later
+instead of requiring a restart.
 
 ---
 

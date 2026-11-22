@@ -37,8 +37,20 @@ CREATE TABLE IF NOT EXISTS alerts (
     related_users   TEXT[],
     event_count     INT DEFAULT 1,
     is_resolved     BOOLEAN DEFAULT FALSE,
+    email_sent      BOOLEAN DEFAULT FALSE,       -- set by the email notifier
     created_at      TIMESTAMPTZ DEFAULT NOW(),
     resolved_at     TIMESTAMPTZ
+);
+
+-- AI service status for the dashboard (also created by ai_analyzer.py;
+-- the definition lives here so a fresh database has it from the start)
+CREATE TABLE IF NOT EXISTS ai_status (
+    id          SERIAL PRIMARY KEY,
+    provider    VARCHAR(50)  NOT NULL,   -- gemini | anthropic | fallback | system
+    status      VARCHAR(50)  NOT NULL,   -- active | rate_limited | no_key | error
+    message     TEXT,
+    updated_at  TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT ai_status_provider_unique UNIQUE (provider)
 );
 
 -- Indexes for fast dashboard queries
